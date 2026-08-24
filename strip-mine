@@ -1,0 +1,899 @@
+--==================================================
+-- STRIP MINER
+-- ComputerCraft / CC:Tweaked Mining Turtle
+--
+-- Usage:
+--   stripmine <length> <rows>
+--
+-- Example:
+--   stripmine 100 10
+--
+-- The turtle:
+--   * Mines 2 blocks high
+--   * Creates parallel tunnels
+--   * Automatically refuels
+--   * Tracks its position
+--   * Returns home when finished
+--   * Returns home when fuel is too low
+--   * Announces ores when discovered
+--   * Attempts to safely handle Ctrl+T
+--==================================================
+
+
+--------------------------------------------------
+-- SETTINGS
+--------------------------------------------------
+
+local args = {...}
+
+local length = tonumber(args[1])
+local rows = tonumber(args[2])
+
+if not length or not rows then
+    print("Usage:")
+    print("stripmine <length> <rows>")
+    print("")
+    print("Example:")
+    print("stripmine 100 10")
+    return
+end
+
+
+--------------------------------------------------
+-- POSITION TRACKING
+--------------------------------------------------
+
+-- Position relative to starting point
+local x = 0
+local y = 0
+local z = 0
+
+-- Direction
+--
+-- 0 = North
+-- 1 = East
+-- 2 = South
+-- 3 = West
+
+local direction = 0
+
+local startDirection = direction
+
+
+--------------------------------------------------
+-- MINING STATISTICS
+--------------------------------------------------
+
+local blocksMined = 0
+local oresFound = 0
+
+
+--------------------------------------------------
+-- ORE DETECTION
+--------------------------------------------------
+
+local function isOre(blockName)
+
+    if not blockName then
+        return false
+    end
+
+    -- Convert to lowercase
+    blockName = string.lower(blockName)
+
+    -- Common ore keywords
+    local oreNames = {
+        "ore",
+        "ancient_debris",
+        "raw_iron_block",
+        "raw_gold_block",
+        "raw_copper_block"
+    }
+
+    for _, ore in ipairs(oreNames) do
+        if string.find(blockName, ore, 1, true) then
+            return true
+        end
+    end
+
+    return false
+end
+
+
+--------------------------------------------------
+-- ANNOUNCE ORE
+--------------------------------------------------
+
+local function announceOre(blockName, location)
+
+    oresFound = oresFound + 1
+
+    print("")
+    print("==============================")
+    print("        ORE FOUND!")
+    print("==============================")
+    print(blockName)
+    print(location)
+    print("Ore #" .. oresFound)
+    print("==============================")
+    print("")
+
+end
+
+
+--------------------------------------------------
+-- CHECK BLOCK FOR ORE
+--------------------------------------------------
+
+local function checkBlock(inspectFunction, location)
+
+    local success, data = inspectFunction()
+
+    if success and data then
+
+        if isOre(data.name) then
+            announceOre(data.name, location)
+        end
+
+    end
+
+end
+
+
+--------------------------------------------------
+-- FUEL
+--------------------------------------------------
+
+local function refuelFromInventory()
+
+    if turtle.getFuelLevel() == "unlimited" then
+        return true
+    end
+
+    for slot = 1, 16 do
+
+        turtle.select(slot)
+
+        -- Test whether this item is fuel
+        if turtle.refuel(0) then
+
+            -- Consume as much fuel as necessary
+            turtle.refuel()
+
+        end
+
+    end
+
+    turtle.select(1)
+
+    return true
+end
+
+
+--------------------------------------------------
+-- CALCULATE DISTANCE FROM HOME
+--------------------------------------------------
+
+local function distanceFromHome()
+
+    return math.abs(x) + math.abs(y) + math.abs(z)
+
+end
+
+
+--------------------------------------------------
+-- FUEL NEEDED TO RETURN HOME
+--------------------------------------------------
+
+local function fuelNeededToReturn()
+
+    -- One fuel is generally required per movement,
+    -- depending on the Minecraft version/fuel type.
+
+    local distance = distanceFromHome()
+
+    -- Add a safety margin.
+    return distance + 20
+
+end
+
+
+--------------------------------------------------
+-- MAINTAIN FUEL
+--------------------------------------------------
+
+local function maintainFuel()
+
+    local fuel = turtle.getFuelLevel()
+
+    if fuel == "unlimited" then
+        return true
+    end
+
+
+    --------------------------------------------------
+    -- Refuel when getting low
+    --------------------------------------------------
+
+    if fuel < 200 then
+        refuelFromInventory()
+        fuel = turtle.getFuelLevel()
+    end
+
+
+    --------------------------------------------------
+    -- Check whether we can still return home
+    --------------------------------------------------
+
+    local needed = fuelNeededToReturn()
+
+    if fuel < needed then
+
+        print("")
+        print("==============================")
+        print("        LOW FUEL")
+        print("==============================")
+        print("Fuel:", fuel)
+        print("Needed to return:", needed)
+        print("==============================")
+        print("")
+
+        return false
+    end
+
+    return true
+
+end
+
+
+--------------------------------------------------
+-- FORWARD MOVEMENT
+--------------------------------------------------
+
+local function forward()
+
+    while not turtle.forward() do
+
+        -- Check fuel before repeatedly trying
+        if not maintainFuel() then
+            error("LOW FUEL")
+        end
+
+        turtle.dig()
+        turtle.attack()
+
+        sleep(0.05)
+
+    end
+
+end
+
+
+--------------------------------------------------
+-- MOVE UP
+--------------------------------------------------
+
+local function up()
+
+    while not turtle.up() do
+
+        if not maintainFuel() then
+            error("LOW FUEL")
+        end
+
+        turtle.digUp()
+        turtle.attackUp()
+
+        sleep(0.05)
+
+    end
+
+end
+
+
+--------------------------------------------------
+-- MOVE DOWN
+--------------------------------------------------
+
+local function down()
+
+    while not turtle.down() do
+
+        if not maintainFuel() then
+            error("LOW FUEL")
+        end
+
+        turtle.digDown()
+        turtle.attackDown()
+
+        sleep(0.05)
+
+    end
+
+end
+
+
+--------------------------------------------------
+-- TURN LEFT
+--------------------------------------------------
+
+local function turnLeft()
+
+    turtle.turnLeft()
+
+    direction = (direction - 1) % 4
+
+end
+
+
+--------------------------------------------------
+-- TURN RIGHT
+--------------------------------------------------
+
+local function turnRight()
+
+    turtle.turnRight()
+
+    direction = (direction + 1) % 4
+
+end
+
+
+--------------------------------------------------
+-- TURN AROUND
+--------------------------------------------------
+
+local function turnAround()
+
+    turtle.turnRight()
+    turtle.turnRight()
+
+    direction = (direction + 2) % 4
+
+end
+
+
+--------------------------------------------------
+-- TRACKED FORWARD MOVEMENT
+--------------------------------------------------
+
+local function moveForward()
+
+    if not maintainFuel() then
+        error("LOW FUEL")
+    end
+
+
+    -- Update position
+
+    if direction == 0 then
+
+        z = z - 1
+
+    elseif direction == 1 then
+
+        x = x + 1
+
+    elseif direction == 2 then
+
+        z = z + 1
+
+    elseif direction == 3 then
+
+        x = x - 1
+
+    end
+
+
+    forward()
+
+end
+
+
+--------------------------------------------------
+-- DIG FORWARD
+--------------------------------------------------
+
+local function digForward()
+
+    -- Look for ore before destroying the block
+    checkBlock(
+        turtle.inspect,
+        "Front"
+    )
+
+
+    while turtle.detect() do
+
+        turtle.dig()
+
+        blocksMined = blocksMined + 1
+
+        sleep(0.03)
+
+    end
+
+
+    moveForward()
+
+end
+
+
+--------------------------------------------------
+-- CLEAR ABOVE
+--------------------------------------------------
+
+local function clearAbove()
+
+    -- Check for ore above
+    checkBlock(
+        turtle.inspectUp,
+        "Above"
+    )
+
+
+    while turtle.detectUp() do
+
+        turtle.digUp()
+
+        blocksMined = blocksMined + 1
+
+        sleep(0.03)
+
+    end
+
+end
+
+
+--------------------------------------------------
+-- CLEAR BELOW
+--------------------------------------------------
+
+local function clearBelow()
+
+    checkBlock(
+        turtle.inspectDown,
+        "Below"
+    )
+
+end
+
+
+--------------------------------------------------
+-- MINE ONE BLOCK OF TUNNEL
+--------------------------------------------------
+
+local function mineBlock()
+
+    -- Check above the turtle
+    clearAbove()
+
+    -- Check below
+    clearBelow()
+
+    -- Mine forward
+    digForward()
+
+    -- Check above the new position
+    clearAbove()
+
+end
+
+
+--------------------------------------------------
+-- INVENTORY CHECK
+--------------------------------------------------
+
+local function inventoryFull()
+
+    for slot = 1, 16 do
+
+        if turtle.getItemCount(slot) == 0 then
+            return false
+        end
+
+    end
+
+    return true
+
+end
+
+
+--------------------------------------------------
+-- RETURN HOME
+--------------------------------------------------
+
+local function returnHome()
+
+    print("")
+    print("==============================")
+    print("       RETURNING HOME")
+    print("==============================")
+    print("")
+
+
+    --------------------------------------------------
+    -- Fix Y
+    --------------------------------------------------
+
+    while y > 0 do
+
+        down()
+
+        y = y - 1
+
+    end
+
+
+    while y < 0 do
+
+        up()
+
+        y = y + 1
+
+    end
+
+
+    --------------------------------------------------
+    -- Fix X
+    --------------------------------------------------
+
+    if x > 0 then
+
+        -- Face West
+
+        while direction ~= 3 do
+            turnRight()
+        end
+
+        while x > 0 do
+
+            forward()
+
+            x = x - 1
+
+        end
+
+    elseif x < 0 then
+
+        -- Face East
+
+        while direction ~= 1 do
+            turnRight()
+        end
+
+        while x < 0 do
+
+            forward()
+
+            x = x + 1
+
+        end
+
+    end
+
+
+    --------------------------------------------------
+    -- Fix Z
+    --------------------------------------------------
+
+    if z > 0 then
+
+        -- Face North
+
+        while direction ~= 0 do
+            turnRight()
+        end
+
+        while z > 0 do
+
+            forward()
+
+            z = z - 1
+
+        end
+
+    elseif z < 0 then
+
+        -- Face South
+
+        while direction ~= 2 do
+            turnRight()
+        end
+
+        while z < 0 do
+
+            forward()
+
+            z = z + 1
+
+        end
+
+    end
+
+
+    --------------------------------------------------
+    -- Restore starting direction
+    --------------------------------------------------
+
+    while direction ~= startDirection do
+        turnRight()
+    end
+
+
+    print("Returned to starting position.")
+
+end
+
+
+--------------------------------------------------
+-- STATUS DISPLAY
+--------------------------------------------------
+
+local function showStatus(row, block)
+
+    term.clear()
+    term.setCursorPos(1, 1)
+
+    print("=== STRIP MINER ===")
+    print("")
+
+    print("Row:       " .. row .. "/" .. rows)
+    print("Distance:  " .. block .. "/" .. length)
+
+    print("")
+
+    local fuel = turtle.getFuelLevel()
+
+    if fuel == "unlimited" then
+        print("Fuel:      Unlimited")
+    else
+        print("Fuel:      " .. fuel)
+        print("Return:    " .. fuelNeededToReturn())
+    end
+
+    print("")
+
+    print("Blocks:    " .. blocksMined)
+    print("Ores:      " .. oresFound)
+
+    print("")
+
+    print("Position:")
+    print("X: " .. x)
+    print("Y: " .. y)
+    print("Z: " .. z)
+
+end
+
+
+--------------------------------------------------
+-- MINING
+--------------------------------------------------
+
+local function mine()
+
+    term.clear()
+    term.setCursorPos(1, 1)
+
+    print("==============================")
+    print("        STRIP MINER")
+    print("==============================")
+    print("")
+
+    print("Length:", length)
+    print("Rows:", rows)
+
+    print("")
+
+    --------------------------------------------------
+    -- Initial fuel
+    --------------------------------------------------
+
+    refuelFromInventory()
+
+    local fuel = turtle.getFuelLevel()
+
+    if fuel == "unlimited" then
+
+        print("Fuel: Unlimited")
+
+    else
+
+        print("Fuel:", fuel)
+
+    end
+
+    print("")
+
+    if not maintainFuel() then
+
+        print("")
+        print("Not enough fuel.")
+        print("Add fuel and try again.")
+
+        return
+
+    end
+
+
+    print("Starting in 3 seconds...")
+
+    sleep(3)
+
+
+    --------------------------------------------------
+    -- Mining rows
+    --------------------------------------------------
+
+    for row = 1, rows do
+
+
+        --------------------------------------------------
+        -- Mine tunnel
+        --------------------------------------------------
+
+        for block = 1, length do
+
+            if not maintainFuel() then
+
+                print("")
+
+                print("Unable to safely continue.")
+                print("Returning home.")
+
+                returnHome()
+
+                return
+
+            end
+
+
+            mineBlock()
+
+
+            --------------------------------------------------
+            -- Update display every 5 blocks
+            --------------------------------------------------
+
+            if block % 5 == 0 then
+                showStatus(row, block)
+            end
+
+
+            --------------------------------------------------
+            -- Inventory check
+            --------------------------------------------------
+
+            if inventoryFull() then
+
+                print("")
+                print("==============================")
+                print("      INVENTORY FULL")
+                print("==============================")
+                print("")
+
+                returnHome()
+
+                return
+
+            end
+
+        end
+
+
+        --------------------------------------------------
+        -- Return to beginning of tunnel
+        --------------------------------------------------
+
+        turnAround()
+
+
+        for block = 1, length do
+
+            moveForward()
+
+        end
+
+
+        turnAround()
+
+
+        --------------------------------------------------
+        -- Move to next tunnel
+        --------------------------------------------------
+
+        if row < rows then
+
+            turnRight()
+
+
+            for i = 1, 3 do
+
+                moveForward()
+
+            end
+
+
+            turnLeft()
+
+        end
+
+    end
+
+
+    --------------------------------------------------
+    -- Finished
+    --------------------------------------------------
+
+    print("")
+    print("==============================")
+    print("       MINING COMPLETE")
+    print("==============================")
+    print("")
+
+    print("Blocks mined:", blocksMined)
+    print("Ores found:", oresFound)
+
+    print("")
+
+    returnHome()
+
+end
+
+
+--------------------------------------------------
+-- SAFE EXECUTION
+--------------------------------------------------
+
+local success, errorMessage = pcall(mine)
+
+
+--------------------------------------------------
+-- ERROR / TERMINATION
+--------------------------------------------------
+
+if not success then
+
+    print("")
+    print("==============================")
+    print("      PROGRAM STOPPED")
+    print("==============================")
+    print("")
+
+    print(errorMessage)
+
+    print("")
+
+    -- Attempt to return home.
+    --
+    -- NOTE:
+    -- ComputerCraft's Ctrl+T behavior varies by version.
+    -- A hard terminate may prevent Lua from reaching
+    -- this section.
+
+    print("Attempting to return home...")
+
+    pcall(returnHome)
+
+end
+
+
+--------------------------------------------------
+-- FINAL STATUS
+--------------------------------------------------
+
+print("")
+print("==============================")
+print("          FINISHED")
+print("==============================")
+print("")
+
+print("Blocks mined:", blocksMined)
+print("Ores found:", oresFound)
+
+print("")
+
+print("Press any key to exit.")
+
+os.pullEvent("key")
