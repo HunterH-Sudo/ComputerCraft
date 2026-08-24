@@ -24,7 +24,7 @@ rednetEnabled = false --Default rednet on or off  [Default false]
 --Arguments assignable by tArgs
 dropSide = "front" --Side it will eject to when full or done [Default "front"]
 careAboutResources = true --Will not stop mining once inventory full if false [Default true]
-doCheckFuel = true --Perform fuel check [Default true]
+doCheckFuel = false --Perform fuel check [Default true]
 doRefuel = false --Whenever it comes to start location will attempt to refuel from inventory [Default false]
 invCheckFreq = 10 --Will check for inventory full every <-- moved spaces [Default 10]
 keepOpen = 1 --How many inventory slots it will attempt to keep open at all times [Default 1]
