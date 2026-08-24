@@ -33,7 +33,7 @@ rednetEnabled = false
 --Arguments assignable by tArgs
 dropSide = "front"
 careAboutResources = true
-doCheckFuel = true
+doCheckFuel = false
 doRefuel = false
 invCheckFreq = 10
 keepOpen = 1
