@@ -988,7 +988,7 @@ local function facingF(num)
 end
 
 --Torch placement function
---Defined after facingF so the direction tracking functions correctly.
+--Places a torch directly underneath the turtle.
 placeTorch = function()
 
     --No torch available
@@ -1000,41 +1000,10 @@ placeTorch = function()
 
     turtle.select(torchSlot)
 
-    --Try the right wall first
-    turtle.turnRight()
-    facingF(1)
-
-    if turtle.detect() then
-
-        turtle.place()
-
-        turtle.turnLeft()
-        facingF(-1)
-
-        turtle.select(oldSlot)
-
-        return
+    -- Try to place the torch underneath the turtle
+    if not turtle.detectDown() then
+        turtle.placeDown()
     end
-
-    --Right wall was empty.
-    --Return to original direction.
-    turtle.turnLeft()
-    facingF(-1)
-
-    --Turn to the left wall.
-    turtle.turnLeft()
-    facingF(-1)
-
-    if turtle.detect() then
-        turtle.place()
-    end
-
-    --Return to original direction.
-    turtle.turnRight()
-    facingF(1)
-
-    turtle.turnRight()
-    facingF(1)
 
     turtle.select(oldSlot)
 end
