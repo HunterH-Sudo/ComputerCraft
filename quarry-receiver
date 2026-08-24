@@ -1210,7 +1210,7 @@ local function addParam(value)
   if val:match("^%-") then
     parameters[#parameters+1] = {val:sub(2)} --Starts a chain with the command. Can be unpacked later
     parameters[val:sub(2)] = {} --Needed for force/before/after parameters
-  elseif parameterIndex ~= 0 then
+  elseif #parameters > 0 then --Only attach stray values to a parameter if one has actually been started yet
     table.insert(parameters[#parameters], value) --value because arguments should be case sensitive for filenames
     table.insert(parameters[parameters[#parameters][1]], value) --Needed for force/after parameters
   end
