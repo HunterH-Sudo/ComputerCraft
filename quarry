@@ -1657,11 +1657,11 @@ function placeMarkerBelow() --Places an item from slot 15 below the turtle as a 
   end
 end
 
-function collectMarkers() --Revisits every marker placed by placeMarkerBelow and digs it back up
+function collectMarkers() --Revisits every marker placed by placeMarkerBelow and digs it back up, working backwards from the last one placed toward the first (so it's a natural path back home instead of a separate side-trip)
   if #markerPositions == 0 then return end
   local returnStatus = statusString
   statusString = "Collecting placed markers"
-  for i=1, #markerPositions do
+  for i=#markerPositions,1,-1 do
     local pos = markerPositions[i]
     eventAdd("goto", pos.x, pos.z, pos.y, facing, "collectMarker")
     eventAdd("digDown(true,true)") --ignoreInspect true forces the dig regardless of oreQuarry blacklist/comparisons; harmless if the block was already mined out during normal quarrying
@@ -2291,6 +2291,7 @@ if relzPos ~= z then --If not on last row of section
 else break
 end
 end ---------------Width End--------
+if lastLayer then collectMarkers() end --Pick up markers now, before the wrap-up below sends the turtle back toward the shaft entrance, so it's one continuous trip home instead of a separate detour
 if layersDone % 2 == 0 then --Will only go back to start on non-even layers
   eventAdd("goto",1,1,yPos,0, "layerStart") --Goto start of layer
 else
