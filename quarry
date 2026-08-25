@@ -56,6 +56,7 @@ frontChest = false --If oreQuarry and chest checking, you can turn this on to ma
 lavaBuffer = 500 --If using a lava bucket, this is the buffer it will wait for before checking for lava [Default 500]
 inventoryMax = 16 --The max number of slots in the turtle inventory [Default 16] (Not assignable by parameter)
 --NOTE: Slot 16 is reserved for torches. Fill it before starting and the turtle will place one below itself every 12 blocks moved (while torches last).
+--NOTE: Slot 15 is reserved for markers. Fill it before starting and the turtle will place one below itself every 16 blocks moved, then revisit and collect every marker once the quarry finishes (before heading home).
 quadEnabled = false --Whether or not to request a quadRotor when out of fuel [Default false]
 quadTimeout = 60 * 5 --How long the turtle will wait for a quadRotor [Default 5 minutes]
 --Standard number slots for fuel (you shouldn't care)
@@ -204,8 +205,8 @@ else
 end
 
 --Pre-defining variables that need to be saved
-      xPos,yPos,zPos,facing,percent,mined,moved,relxPos, rowCheck, connected, isInPath, layersDone, attacked, startY, chestFull, gotoDest, atChest, fuelLevel, numDropOffs, allowedItems, compareSlots, dumpSlots, selectedSlot, extraDropItems, oldOreQuarry, specialSlots, relzPos, eventInsertionPoint
-    = 0,   1,   1,   0,     0,      0,    0,    1,       true   ,  false,     true,     1,          0,        0,      false,     "",       false,   0,         0,           {},             {},           {},      1,            false,          false,        {explicit = {}},    0, 1
+      xPos,yPos,zPos,facing,percent,mined,moved,relxPos, rowCheck, connected, isInPath, layersDone, attacked, startY, chestFull, gotoDest, atChest, fuelLevel, numDropOffs, allowedItems, compareSlots, dumpSlots, selectedSlot, extraDropItems, oldOreQuarry, specialSlots, relzPos, eventInsertionPoint, markerPositions
+    = 0,   1,   1,   0,     0,      0,    0,    1,       true   ,  false,     true,     1,          0,        0,      false,     "",       false,   0,         0,           {},             {},           {},      1,            false,          false,        {explicit = {}},    0, 1, {}
 
 --These are slot options that need to exist as variables for parameters to work.
   enderChest, fuelChest, lavaBucket, compareChest
@@ -1645,6 +1646,31 @@ function placeTorchBelow() --Places a torch (or whatever is in slot 16) below th
   select(returnSlot)
 end
 
+function placeMarkerBelow() --Places an item from slot 15 below the turtle as a marker, remembering where so it can be picked back up when the quarry finishes
+  if turtle.getItemCount(15) == 0 then return end --Out of markers, don't bother
+  local returnSlot = selectedSlot or 1
+  select(15)
+  local success = turtle.placeDown()
+  select(returnSlot)
+  if success then
+    table.insert(markerPositions, {x = xPos, z = zPos, y = yPos})
+  end
+end
+
+function collectMarkers() --Revisits every marker placed by placeMarkerBelow and digs it back up
+  if #markerPositions == 0 then return end
+  local returnStatus = statusString
+  statusString = "Collecting placed markers"
+  for i=1, #markerPositions do
+    local pos = markerPositions[i]
+    eventAdd("goto", pos.x, pos.z, pos.y, facing, "collectMarker")
+    eventAdd("digDown(true,true)") --ignoreInspect true forces the dig regardless of oreQuarry blacklist/comparisons; harmless if the block was already mined out during normal quarrying
+  end
+  runAllEvents()
+  markerPositions = {}
+  statusString = returnStatus
+end
+
 function horizontalMove(movement, posAdd, doAdd)
   if doAdd == nil then doAdd = true end
   if movement() then
@@ -1835,6 +1861,9 @@ function mine(doDigDown, doDigUp, outOfPath,doCheckInv) -- Basic Move Forward
   end
   if not outOfPath and moved > 0 and moved % 12 == 0 then --Every 12 blocks moved, drop a torch below from slot 16
     placeTorchBelow()
+  end
+  if not outOfPath and moved > 0 and moved % 16 == 0 then --Every 16 blocks moved, drop a marker below from slot 15 (picked back up once the quarry finishes)
+    placeMarkerBelow()
   end
   percent = math.ceil(moved/moveVolume*100)
   updateDisplay()
@@ -2120,6 +2149,7 @@ function dropOff() --Not local because called in mine()
   return true
 end
 function endingProcedure() --Used both at the end and in "biometrics"
+  collectMarkers() --Pick back up anything placed by placeMarkerBelow before heading home
   eventAdd("goto",1,1,yPos,2,"quarryStart") --Allows for startDown variable
   eventAdd("goto",0,1,1,2, "quarryStart") --Go back to base
   runAllEvents()
