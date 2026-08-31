@@ -1,22 +1,17 @@
 -- Configuration
 local redstoneSide = "back"  -- Options: "top", "bottom", "left", "right", "front", "back"
 local sleepSeconds = 120     -- 2 minutes
-local pulseDuration = 1      -- How long the redstone pulse stays ON (in seconds)
 
 print("Starting redstone pulse timer...")
-print("Pulsing " .. redstoneSide .. " side every " .. (sleepSeconds / 60) .. " minutes.")
+print("Pulsing " .. redstoneSide .. " side every " .. (sleepSeconds) .. " seconds.")
 
 while true do
     -- Wait 2 minutes
     os.sleep(sleepSeconds)
-    
-    -- Turn redstone signal ON
+
     redstone.setOutput(redstoneSide, true)
-    print("Pulse SENT at " .. textutils.formatTime(os.time(), true))
-    
-    -- Wait 1 second while ON
-    os.sleep(pulseDuration)
-    
-    -- Turn redstone signal OFF
+    os.sleep(0) -- Yields for 1 Minecraft tick (0.05 seconds)
     redstone.setOutput(redstoneSide, false)
+    os.sleep(0)
 end
+
