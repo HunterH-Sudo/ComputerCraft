@@ -1,0 +1,50 @@
+os.loadAPI("ocs/apis/sensor")
+
+-- Change "top", "left", "right", etc. to match where your Sensor Peripheral is located
+local sensorSide = "top" 
+local mySensor = sensor.wrap(sensorSide)
+
+if not mySensor then
+    error("No sensor found on " .. sensorSide .. " side!")
+end
+
+while true do
+    term.clear()
+    term.setCursorPos(1, 1)
+    
+    local targets = mySensor.getTargets()
+    local reactorFound = false
+
+    for targetKey, targetData in pairs(targets) do
+        -- Fetch full details for each block detected by the Machine Card
+        local details = mySensor.getTargetDetails(targetKey)
+        
+        -- Check if target is an IC2 Nuclear Reactor or Chamber
+        if details and (details.Heat ~= nil or details.MaxHeat ~= nil) then
+            reactorFound = true
+            local currentHeat = details.Heat or 0
+            local maxHeat = details.MaxHeat or 10000
+            local percentage = math.floor((currentHeat / maxHeat) * 100)
+
+            print("=== REACTOR MONITOR ===")
+            print("Status: Active")
+            print("Heat: " .. currentHeat .. " / " .. maxHeat)
+            print("Temperature: " .. percentage .. "%")
+
+            -- Emergency Shutdown Example via Redstone
+            if currentHeat > 4000 then
+                print("WARNING: OVERHEATING!")
+                rs.setOutput("back", true) -- Outputs redstone signal to cut reactor power/control
+            else
+                rs.setOutput("back", false)
+            end
+            break
+        end
+    end
+
+    if not reactorFound then
+        print("Searching for IC2 Nuclear Reactor...")
+    end
+
+    os.sleep(1)
+end
