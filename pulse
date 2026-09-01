@@ -1,17 +1,16 @@
 -- Configuration
-local redstoneSide = "back"  -- Options: "top", "bottom", "left", "right", "front", "back"
+local redstoneSide = "right"
 local sleepSeconds = 120     -- 2 minutes
 
 print("Starting redstone pulse timer...")
 print("Pulsing " .. redstoneSide .. " side every " .. (sleepSeconds) .. " seconds.")
 
 while true do
-    -- Wait 2 minutes
     os.sleep(sleepSeconds)
-
     redstone.setOutput(redstoneSide, true)
-    os.sleep(0) -- Yields for 1 Minecraft tick (0.05 seconds)
-    redstone.setOutput(redstoneSide, false)
     os.sleep(0)
+    print("Pulse SENT at " .. textutils.formatTime(os.time(), true))
+    redstone.setOutput(redstoneSide, false)
+
 end
 
