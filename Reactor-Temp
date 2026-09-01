@@ -1,7 +1,6 @@
 os.loadAPI("ocs/apis/sensor")
 
--- Change "top", "left", "right", etc. to match where your Sensor Peripheral is located
-local sensorSide = "top" 
+local sensorSide = "top" -- Side with Sensor Peripheral
 local mySensor = sensor.wrap(sensorSide)
 
 if not mySensor then
@@ -15,35 +14,43 @@ while true do
     local targets = mySensor.getTargets()
     local reactorFound = false
 
-    for targetKey, targetData in pairs(targets) do
-        -- Fetch full details for each block detected by the Machine Card
+    for targetKey, _ in pairs(targets) do
         local details = mySensor.getTargetDetails(targetKey)
         
-        -- Check if target is an IC2 Nuclear Reactor or Chamber
-        if details and (details.Heat ~= nil or details.MaxHeat ~= nil) then
-            reactorFound = true
-            local currentHeat = details.Heat or 0
-            local maxHeat = details.MaxHeat or 10000
-            local percentage = math.floor((currentHeat / maxHeat) * 100)
+        -- OpenCCSensors places IC2 Reactor properties inside sub-tables or under Raw/Heat
+        if details then
+            local currentHeat = 0
+            local maxHeat = 10000
 
-            print("=== REACTOR MONITOR ===")
-            print("Status: Active")
-            print("Heat: " .. currentHeat .. " / " .. maxHeat)
-            print("Temperature: " .. percentage .. "%")
-
-            -- Emergency Shutdown Example via Redstone
-            if currentHeat > 4000 then
-                print("WARNING: OVERHEATING!")
-                rs.setOutput("back", true) -- Outputs redstone signal to cut reactor power/control
-            else
-                rs.setOutput("back", false)
+            -- Handle nested table structure safely
+            if type(details.Heat) == "table" then
+                currentHeat = details.Heat.Heat or details.Heat.val or 0
+                maxHeat = details.Heat.MaxHeat or 10000
+            elseif type(details.Heat) == "number" then
+                currentHeat = details.Heat
+            elseif details.Raw and details.Raw.Heat then
+                currentHeat = details.Raw.Heat
+                maxHeat = details.Raw.MaxHeat or 10000
             end
-            break
+
+            -- Verify we found a valid reactor target
+            if details.name and details.name:find("Reactor") or currentHeat > 0 or details.MaxHeat then
+                reactorFound = true
+                maxHeat = (type(details.MaxHeat) == "number" and details.MaxHeat) or maxHeat
+                
+                local percentage = math.floor((currentHeat / maxHeat) * 100)
+
+                print("=== REACTOR MONITOR ===")
+                print("Heat: " .. currentHeat .. " / " .. maxHeat)
+                print("Temperature: " .. percentage .. "%")
+                break
+            end
         end
     end
 
     if not reactorFound then
         print("Searching for IC2 Nuclear Reactor...")
+        print("Ensure Machine Card is inside Sensor Peripheral!")
     end
 
     os.sleep(1)
