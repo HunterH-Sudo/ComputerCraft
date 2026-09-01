@@ -1,5 +1,77 @@
 os.loadAPI("ocs/apis/sensor")
-local s = sensor.wrap("top") -- change to your sensor side
-for k, v in pairs(s.getTargets()) do
-    textutils.pagedPrint(textutils.serialize(s.getTargetDetails(k)))
+
+local sensorSide = "top" -- Change this to the side your sensor is on
+local mySensor = sensor.wrap(sensorSide)
+
+if not mySensor then
+    error("No sensor peripheral found on side: " .. sensorSide)
+end
+
+while true do
+    term.clear()
+    term.setCursorPos(1, 1)
+    
+    -- 1. Get targets safely to prevent the "table expected, got nil" error
+    local targets = mySensor.getTargets()
+    
+    if type(targets) ~= "table" then
+        print("Status: Waiting for sensor data...")
+        print("- Is the Machine Sensor Card inserted?")
+        print("- Is the reactor placed correctly?")
+    else
+        local reactorFound = false
+        
+        -- 2. Safely iterate through targets
+        for targetKey, basicInfo in pairs(targets) do
+            local details = mySensor.getTargetDetails(targetKey)
+            
+            -- 3. Ensure details is a table before looking inside it
+            if type(details) == "table" then
+                local name = details.Name or details.name or "Unknown"
+                
+                -- Check if the target is a reactor or chamber
+                if name:find("Reactor") or name:find("Chamber") or details.Heat ~= nil or details.heat ~= nil then
+                    reactorFound = true
+                    
+                    local currentHeat = 0
+                    local maxHeat = 10000
+                    
+                    -- Extract heat data defensively regardless of OpenCCSensors version
+                    if type(details.Heat) == "number" then
+                        currentHeat = details.Heat
+                        maxHeat = type(details.MaxHeat) == "number" and details.MaxHeat or 10000
+                    elseif type(details.Heat) == "table" then
+                        currentHeat = details.Heat.Heat or details.Heat.val or details.Heat.value or 0
+                        maxHeat = details.Heat.MaxHeat or details.Heat.max or 10000
+                    elseif type(details.heat) == "number" then
+                        currentHeat = details.heat
+                        maxHeat = type(details.maxHeat) == "number" and details.maxHeat or 10000
+                    end
+                    
+                    local percentage = math.floor((currentHeat / maxHeat) * 100)
+                    
+                    print("=== REACTOR MONITOR ===")
+                    print("Block: " .. name)
+                    print("Heat: " .. currentHeat .. " / " .. maxHeat)
+                    print("Temp: " .. percentage .. "%")
+                    
+                    if percentage >= 50 then
+                        print("WARNING: Heat above 50%!")
+                    else
+                        print("Status: Stable")
+                    end
+                    
+                    break -- Stop checking targets once the reactor is found
+                end
+            end
+        end
+        
+        if not reactorFound then
+            print("Sensor is active, but no Reactor found.")
+            print("- Ensure Sensor is close enough.")
+            print("- Ensure it is an IC2 Machine Sensor Card.")
+        end
+    end
+    
+    os.sleep(1)
 end
